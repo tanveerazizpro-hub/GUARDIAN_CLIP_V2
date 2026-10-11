@@ -50,7 +50,6 @@ class WakeWordService : Service(), RecognitionListener {
                     copyAssetDirectory(MODEL_DIRECTORY, modelDirectory)
                 }
                 
-                // 👇 NEW: Verify critical files actually copied 👇
                 updateNotification("Verifying model files...")
                 val requiredFiles = listOf("am/final.mdl", "uuid", "conf/mfcc.conf", "graph/Gr.fst")
                 for (file in requiredFiles) {
@@ -58,7 +57,6 @@ class WakeWordService : Service(), RecognitionListener {
                         throw Exception("Missing: $file")
                     }
                 }
-                // 👆 ------------------------------------------ 👆
                 
                 updateNotification("Loading AI model into RAM...")
                 val loadedModel = Model(modelDirectory.absolutePath)
@@ -75,7 +73,6 @@ class WakeWordService : Service(), RecognitionListener {
                 
             } catch (error: Exception) {
                 Log.e(TAG, "Vosk Init Error", error)
-                // 👇 FIX: Show the specific error in the notification 👇
                 val errorMsg = error.message ?: "Unknown error"
                 updateNotification("❌ Error: $errorMsg")
             }
