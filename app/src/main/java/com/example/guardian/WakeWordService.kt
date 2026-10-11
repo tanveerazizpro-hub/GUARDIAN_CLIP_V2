@@ -37,7 +37,6 @@ class WakeWordService : Service(), RecognitionListener {
 
         serviceScope.launch {
             try {
-                // MOVED INSIDE TRY BLOCK: So we can catch Android 14 Foreground Service restrictions!
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     startForeground(NOTIFICATION_ID, buildNotification("Initializing..."), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
                 } else {
@@ -52,7 +51,22 @@ class WakeWordService : Service(), RecognitionListener {
                 }
                 
                 updateNotification("Verifying model files...")
-                val requiredFiles = listOf("am/final.mdl", "uuid", "conf/mfcc.conf", "graph/Gr.fst")
+                val requiredFiles = listOf(
+                    "am/final.mdl",
+                    "conf/mfcc.conf",
+                    "conf/model.conf",
+                    "graph/HCLr.fst",
+                    "graph/Gr.fst",
+                    "graph/disambig_tid.int",
+                    "graph/phones/word_boundary.int",
+                    "ivector/final.dubm",
+                    "ivector/final.ie",
+                    "ivector/final.mat",
+                    "ivector/global_cmvn.stats",
+                    "ivector/online_cmvn.conf",
+                    "ivector/splice.conf",
+                    "uuid"
+                )
                 for (file in requiredFiles) {
                     if (!File(modelDirectory, file).exists()) {
                         throw Exception("Missing: $file")
@@ -75,6 +89,7 @@ class WakeWordService : Service(), RecognitionListener {
             } catch (error: Exception) {
                 Log.e(TAG, "Vosk Init Error", error)
                 val errorMsg = error.message ?: "Unknown error"
+                // THIS WILL SHOW THE FULL ERROR, NOT A TRUNCATED ONE
                 updateNotification("❌ Error: $errorMsg")
             }
         }
@@ -161,6 +176,7 @@ class WakeWordService : Service(), RecognitionListener {
             .setSmallIcon(android.R.drawable.ic_lock_silent_mode)
             .setContentTitle("Guardian Status")
             .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message)) // 👈 THIS IS THE MAGIC LINE
             .setOngoing(true)
             .setSilent(true)
             .build()
