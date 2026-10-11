@@ -109,13 +109,17 @@ class MainActivity : ComponentActivity() {
                         sharedPreferences.edit().putString(KEY_EMERGENCY_NUMBER, newNumber).apply()
                         GuardianService.emergencyPhoneNumber = newNumber
                         GuardianService.emergencySmsNumber = newNumber
-                        Toast.makeText(this, "Emergency contact saved: $newNumber", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Emergency contact saved", Toast.LENGTH_SHORT).show()
                     },
-                    onStartService = { startGuardianService() },
-                    onStopService = { stopGuardianService() },
-                    onCancelAlarm = { cancelAlarm() },
-                    onTriggerManualSos = { triggerManualSos() },
-                    onStartWakeWord = { startWakeWordService() }
+                    onStartProtection = {
+                        startGuardianService()
+                        startWakeWordService()
+                    },
+                    onStopProtection = {
+                        stopGuardianService()
+                        stopWakeWordService()
+                    },
+                    onTriggerManualSos = { triggerManualSos() }
                 )
             }
         }
@@ -126,29 +130,31 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, "Allow permissions before arming Guardian.", Toast.LENGTH_LONG).show()
             return
         }
-        val intent = Intent(this, GuardianService::class.java).apply {
-            action = GuardianService.ACTION_START_FGS
-        }
+        val intent = Intent(this, GuardianService::class.java).apply { action = GuardianService.ACTION_START_FGS }
         runCatching { ContextCompat.startForegroundService(this, intent) }
-            .onSuccess { Toast.makeText(this, "Guardian protection is now armed", Toast.LENGTH_SHORT).show() }
-            .onFailure { Toast.makeText(this, "Guardian could not start: ${it.message}", Toast.LENGTH_LONG).show() }
     }
 
     private fun stopGuardianService() {
-        if (GuardianService.guardianState.value is GuardianService.GuardianState.INACTIVE) return
-        val intent = Intent(this, GuardianService::class.java).apply {
-            action = GuardianService.ACTION_STOP_FGS
-        }
+        val intent = Intent(this, GuardianService::class.java).apply { action = GuardianService.ACTION_STOP_FGS }
         runCatching { ContextCompat.startForegroundService(this, intent) }
-            .onSuccess { Toast.makeText(this, "Guardian Protection Service Stopped", Toast.LENGTH_SHORT).show() }
     }
 
-    private fun cancelAlarm() {
-        if (GuardianService.guardianState.value !is GuardianService.GuardianState.COUNTDOWN) return
-        val intent = Intent(this, GuardianService::class.java).apply {
-            action = GuardianService.ACTION_CANCEL_ALARM
+    private fun startWakeWordService() {
+        val intent = Intent(this, WakeWordService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ContextCompat.startForegroundService(this, intent)
+        } else {
+            startService(intent)
         }
-        runCatching { ContextCompat.startForegroundService(this, intent) }
+    }
+
+    private fun stopWakeWordService() {
+        val intent = Intent(this, WakeWordService::class.java).apply { action = WakeWordService.ACTION_STOP }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            ContextCompat.startForegroundService(this, intent)
+        } else {
+            startService(intent)
+        }
     }
 
     private fun triggerManualSos() {
@@ -156,20 +162,8 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, "Allow permissions before sending an SOS.", Toast.LENGTH_LONG).show()
             return
         }
-        val intent = Intent(this, GuardianService::class.java).apply {
-            action = GuardianService.ACTION_MANUAL_SOS
-        }
+        val intent = Intent(this, GuardianService::class.java).apply { action = GuardianService.ACTION_MANUAL_SOS }
         runCatching { ContextCompat.startForegroundService(this, intent) }
-            .onFailure { Toast.makeText(this, "SOS could not start: ${it.message}", Toast.LENGTH_LONG).show() }
-    }
-
-    private fun startWakeWordService() {
-        val serviceIntent = Intent(this, WakeWordService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            ContextCompat.startForegroundService(this, serviceIntent)
-        } else {
-            startService(serviceIntent)
-        }
     }
 
     private fun hasForegroundServicePermissions(): Boolean {
@@ -189,11 +183,9 @@ class MainActivity : ComponentActivity() {
 fun GuardianMainScreen(
     initialEmergencyNumber: String,
     onSaveEmergencyNumber: (String) -> Unit,
-    onStartService: () -> Unit,
-    onStopService: () -> Unit,
-    onCancelAlarm: () -> Unit,
-    onTriggerManualSos: () -> Unit,
-    onStartWakeWord: () -> Unit
+    onStartProtection: () -> Unit,
+    onStopProtection: () -> Unit,
+    onTriggerManualSos: () -> Unit
 ) {
     val context = LocalContext.current
     var emergencyContactInput by remember { mutableStateOf(initialEmergencyNumber) }
@@ -211,9 +203,7 @@ fun GuardianMainScreen(
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.BODY_SENSORS
         )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            list.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) list.add(Manifest.permission.POST_NOTIFICATIONS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             list.add(Manifest.permission.BLUETOOTH_SCAN)
             list.add(Manifest.permission.BLUETOOTH_CONNECT)
@@ -226,18 +216,9 @@ fun GuardianMainScreen(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
         val hasMic = results[Manifest.permission.RECORD_AUDIO] ?: false
-        val hasNotif = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            results[Manifest.permission.POST_NOTIFICATIONS] ?: false
-        } else true
-
+        val hasNotif = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) results[Manifest.permission.POST_NOTIFICATIONS] ?: false else true
         if (hasMic && hasNotif) {
-            onStartWakeWord()
-        }
-        
-        val grantedCount = results.values.count { it }
-        val totalCount = results.size
-        if (grantedCount < totalCount) {
-            Toast.makeText(context, "Notice: ${totalCount - grantedCount} permissions pending. Full safety features require all granted permissions.", Toast.LENGTH_LONG).show()
+            onStartProtection()
         }
     }
 
@@ -250,7 +231,7 @@ fun GuardianMainScreen(
         UrgentCountdownDialog(
             remainingSeconds = currentCountdown.remainingSeconds,
             reason = currentCountdown.reason,
-            onCancel = onCancelAlarm,
+            onCancel = { onStopProtection() },
             onContinue = onTriggerManualSos
         )
     }
@@ -295,38 +276,27 @@ fun GuardianMainScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = when (val state = guardianState) {
-                            is GuardianService.GuardianState.INACTIVE -> "Protection is off. Start Guardian to monitor Bluetooth and movement triggers."
-                            is GuardianService.GuardianState.ARMED -> "Monitoring Bluetooth HC-05 ('S' / 'SOS') and accelerometer violent struggle patterns."
-                            is GuardianService.GuardianState.COUNTDOWN -> "DISTRESS TRIGGERED: ${state.reason}. ${state.remainingSeconds}s remaining before emergency dispatch."
+                            is GuardianService.GuardianState.INACTIVE -> "Protection is off."
+                            is GuardianService.GuardianState.ARMED -> "Monitoring Bluetooth HC-05 and accelerometer. Listening for 'help'."
+                            is GuardianService.GuardianState.COUNTDOWN -> "DISTRESS TRIGGERED: ${state.reason}. ${state.remainingSeconds}s remaining."
                             is GuardianService.GuardianState.EXECUTING -> "ACTION IN PROGRESS: ${state.currentTask}"
                         },
                         fontSize = 13.sp, color = Color(0xFFE2E8F0), lineHeight = 18.sp
                     )
                     Spacer(modifier = Modifier.height(14.dp))
                     
+                    // UNIFIED START/STOP PROTECTION BUTTONS
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = onStartService, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981), contentColor = Color.White), shape = RoundedCornerShape(10.dp)) {
+                        Button(onClick = onStartProtection, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981), contentColor = Color.White), shape = RoundedCornerShape(10.dp)) {
                             Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Start Service", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Start Protection", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         }
-                        OutlinedButton(onClick = onStopService, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFCBD5E1)), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155)), shape = RoundedCornerShape(10.dp)) {
+                        OutlinedButton(onClick = onStopProtection, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFCBD5E1)), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155)), shape = RoundedCornerShape(10.dp)) {
                             Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Stop Service", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Stop Protection", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Button(
-                        onClick = onStartWakeWord,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB), contentColor = Color.White),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Manual Start Wake Word", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -357,7 +327,7 @@ fun GuardianMainScreen(
             MassiveManualSosButton(onClick = onTriggerManualSos)
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "Hardware Demo Mode: Tablet screen forced ON (keepScreenOn). Ready for Bluetooth HC-05 & Struggle Detection.",
+                text = "Hardware Demo Mode: Tablet screen forced ON.",
                 fontSize = 11.sp, color = Color(0xFF64748B), textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
@@ -410,7 +380,7 @@ fun UrgentCountdownDialog(remainingSeconds: Int, reason: String, onCancel: () ->
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Emergency sequence will activate when countdown expires: GPS dispatch, SOS SMS, phone call, & audio recording.", fontSize = 11.sp, color = Color(0xFF94A3B8), textAlign = TextAlign.Center, lineHeight = 15.sp)
+                Text("Emergency sequence will activate when countdown expires.", fontSize = 11.sp, color = Color(0xFF94A3B8), textAlign = TextAlign.Center, lineHeight = 15.sp)
             }
         },
         confirmButton = {
