@@ -34,15 +34,16 @@ class WakeWordService : Service(), RecognitionListener {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, buildNotification("Initializing..."), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
-        } else {
-            startForeground(NOTIFICATION_ID, buildNotification("Initializing..."))
-        }
 
         serviceScope.launch {
             try {
+                // MOVED INSIDE TRY BLOCK: So we can catch Android 14 Foreground Service restrictions!
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(NOTIFICATION_ID, buildNotification("Initializing..."), ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+                } else {
+                    startForeground(NOTIFICATION_ID, buildNotification("Initializing..."))
+                }
+
                 updateNotification("Copying AI model... (Takes ~15 seconds)")
                 val modelDirectory = File(filesDir, MODEL_DIRECTORY)
                 
