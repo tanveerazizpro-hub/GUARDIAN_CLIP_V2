@@ -43,36 +43,15 @@ class WakeWordService : Service(), RecognitionListener {
                     startForeground(NOTIFICATION_ID, buildNotification("Initializing..."))
                 }
 
-                updateNotification("Copying AI model... (Takes ~15 seconds)")
                 val modelDirectory = File(filesDir, MODEL_DIRECTORY)
-                
-                if (!File(modelDirectory, "am").exists()) {
-                    copyAssetDirectory(MODEL_DIRECTORY, modelDirectory)
+                // ALWAYS WIPE OLD FILES (this fixes the corrupted README folder from previous attempts)
+                if (modelDirectory.exists()) {
+                    modelDirectory.deleteRecursively()
                 }
-                
-                updateNotification("Verifying model files...")
-                val requiredFiles = listOf(
-                    "am/final.mdl",
-                    "conf/mfcc.conf",
-                    "conf/model.conf",
-                    "graph/HCLr.fst",
-                    "graph/Gr.fst",
-                    "graph/disambig_tid.int",
-                    "graph/phones/word_boundary.int",
-                    "ivector/final.dubm",
-                    "ivector/final.ie",
-                    "ivector/final.mat",
-                    "ivector/global_cmvn.stats",
-                    "ivector/online_cmvn.conf",
-                    "ivector/splice.conf",
-                    "uuid"
-                )
-                for (file in requiredFiles) {
-                    if (!File(modelDirectory, file).exists()) {
-                        throw Exception("Missing: $file")
-                    }
-                }
-                
+
+                updateNotification("Copying AI model... (Takes ~15 seconds)")
+                copyAssetDirectory(MODEL_DIRECTORY, modelDirectory)
+
                 updateNotification("Loading AI model into RAM...")
                 val loadedModel = Model(modelDirectory.absolutePath)
                 model = loadedModel
@@ -89,20 +68,22 @@ class WakeWordService : Service(), RecognitionListener {
             } catch (error: Exception) {
                 Log.e(TAG, "Vosk Init Error", error)
                 val errorMsg = error.message ?: "Unknown error"
-                // THIS WILL SHOW THE FULL ERROR, NOT A TRUNCATED ONE
                 updateNotification("❌ Error: $errorMsg")
             }
         }
     }
 
     private fun copyAssetDirectory(assetPath: String, destination: File) {
-        destination.mkdirs()
         val children = assets.list(assetPath) ?: emptyArray()
         if (children.isEmpty()) {
+            // It's a FILE. Ensure its parent directory exists, then write the file.
+            destination.parentFile?.mkdirs()
             assets.open(assetPath).use { input ->
                 FileOutputStream(destination).use { output -> input.copyTo(output) }
             }
         } else {
+            // It's a DIRECTORY. Create it and recurse into children.
+            destination.mkdirs()
             children.forEach { child ->
                 copyAssetDirectory("$assetPath/$child", File(destination, child))
             }
@@ -176,7 +157,7 @@ class WakeWordService : Service(), RecognitionListener {
             .setSmallIcon(android.R.drawable.ic_lock_silent_mode)
             .setContentTitle("Guardian Status")
             .setContentText(message)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message)) // 👈 THIS IS THE MAGIC LINE
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setOngoing(true)
             .setSilent(true)
             .build()
