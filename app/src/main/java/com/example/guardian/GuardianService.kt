@@ -26,6 +26,7 @@ import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Binder
 import android.os.Build
+import android.os.Environment // 👈 ADDED
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.VibrationEffect
@@ -121,7 +122,7 @@ class GuardianService : Service(), SensorEventListener {
         const val ACTION_STOP_FGS = "ACTION_STOP_FGS"
         const val ACTION_CANCEL_ALARM = "ACTION_CANCEL_ALARM"
         const val ACTION_MANUAL_SOS = "ACTION_MANUAL_SOS"
-        const val ACTION_WAKE_WORD_SOS = "ACTION_WAKE_WORD_SOS" // 👈 NEW ACTION
+        const val ACTION_WAKE_WORD_SOS = "ACTION_WAKE_WORD_SOS"
     }
 
     override fun onCreate() {
@@ -141,7 +142,7 @@ class GuardianService : Service(), SensorEventListener {
         when (intent?.action) {
             ACTION_CANCEL_ALARM -> cancelAlarm()
             ACTION_MANUAL_SOS -> triggerManualSos()
-            ACTION_WAKE_WORD_SOS -> triggerAlarm("Wake word 'help' detected") // 👈 HANDLES WAKE WORD
+            ACTION_WAKE_WORD_SOS -> triggerAlarm("Wake word 'help' detected")
             ACTION_STOP_FGS -> stopServiceGracefully()
             else -> Log.d(TAG, "GuardianService running in foreground")
         }
@@ -434,7 +435,8 @@ class GuardianService : Service(), SensorEventListener {
     private fun startAudioRecording() {
         if (!hasPermission(Manifest.permission.RECORD_AUDIO)) return
         try {
-            val dir = File(filesDir, "guardian_evidence").apply { mkdirs() }
+            // 👇 CHANGED: Save to external visible folder instead of private internal folder
+            val dir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "GuardianEvidence").apply { mkdirs() }
             val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
             audioRecordingFile = File(dir, "EVIDENCE_${timeStamp}.m4a")
             mediaRecorder = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(this) else @Suppress("DEPRECATION") MediaRecorder()).apply {
@@ -444,6 +446,7 @@ class GuardianService : Service(), SensorEventListener {
                 setOutputFile(audioRecordingFile?.absolutePath)
                 prepare(); start()
             }
+            Log.d(TAG, "Recording started: ${audioRecordingFile?.absolutePath}")
         } catch (e: Exception) { Log.e(TAG, "Recorder Error", e) }
     }
 
@@ -451,6 +454,7 @@ class GuardianService : Service(), SensorEventListener {
         val recorder = mediaRecorder ?: return
         mediaRecorder = null
         try { recorder.stop() } catch (_: RuntimeException) {} finally { recorder.release() }
+        Log.d(TAG, "Recording saved: ${audioRecordingFile?.absolutePath}")
     }
 
     private fun stopServiceGracefully() {
