@@ -435,7 +435,7 @@ class GuardianService : Service(), SensorEventListener {
     private fun startAudioRecording() {
         if (!hasPermission(Manifest.permission.RECORD_AUDIO)) return
         try {
-            // Back to SAFE location: app's private external folder. No special permissions needed.
+            // Safe location: app's private external folder. No special permissions needed.
             val dir = File(getExternalFilesDir(Environment.DIRECTORY_MUSIC), "GuardianEvidence").apply { mkdirs() }
             val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
             audioRecordingFile = File(dir, "EVIDENCE_${timeStamp}.m4a")
