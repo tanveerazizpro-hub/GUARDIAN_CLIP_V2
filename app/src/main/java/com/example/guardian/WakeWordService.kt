@@ -110,7 +110,8 @@ class WakeWordService : Service(), RecognitionListener {
         if (raw.isNullOrBlank() || sosTriggered) return
         try {
             val recognized = JSONObject(raw).optString("text").trim().lowercase()
-            if (recognized.contains("help")) {
+            // 👇 FIXED: Strict match instead of contains. This stops "hello" from triggering!
+            if (recognized == "help") {
                 sosTriggered = true
                 updateNotification("🚨 SOS TRIGGERED! 🚨")
                 triggerSOSProtocol()
@@ -121,7 +122,6 @@ class WakeWordService : Service(), RecognitionListener {
     }
 
     private fun triggerSOSProtocol() {
-        // CHANGED: Send ACTION_WAKE_WORD_SOS to trigger the 30s countdown!
         val intent = Intent(this, GuardianService::class.java).apply {
             action = GuardianService.ACTION_WAKE_WORD_SOS
         }
@@ -156,13 +156,12 @@ class WakeWordService : Service(), RecognitionListener {
         manager.notify(NOTIFICATION_ID, buildNotification(message))
     }
 
-    // ADDED: Handle STOP action and RESET sosTriggered flag on every start
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             stopSelf()
             return START_NOT_STICKY
         }
-        sosTriggered = false // 👈 Resets the flag so it can detect again!
+        sosTriggered = false // Resets the flag so it can detect again!
         return START_STICKY
     }
 
@@ -184,7 +183,8 @@ class WakeWordService : Service(), RecognitionListener {
         private const val NOTIFICATION_ID = 4102
         private const val MODEL_DIRECTORY = "vosk-model-small-en-us-0.15"
         private const val SAMPLE_RATE = 16_000.0f
-        private const val GRAMMAR = """["help", "[unk]"]"""
-        const val ACTION_STOP = "ACTION_STOP_WAKE_WORD" // 👈 NEW ACTION
+        // 👇 FIXED: Added "hello" and "yellow" so Vosk doesn't confuse them with "help"
+        private const val GRAMMAR = """["help", "hello", "yellow", "[unk]"]"""
+        const val ACTION_STOP = "ACTION_STOP_WAKE_WORD"
     }
 }
