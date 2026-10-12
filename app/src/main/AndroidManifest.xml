@@ -32,14 +32,12 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     
-    <!-- 👇 FIXED: Added tools:ignore="ScopedStorage" to prevent build failure 👇 -->
-    <uses-permission
-        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
-        tools:ignore="ScopedStorage" />
+    <!-- 👇 CORRECTED: Using the official maxSdkVersion workaround 👇 -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
-    <!-- 👆 -------------------------------------------------------------------- 👆 -->
+    <!-- 👆 ---------------------------------------------------- 👆 -->
 
     <uses-permission android:name="android.permission.BODY_SENSORS" />
     <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
